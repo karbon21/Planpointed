@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Planpointed — Building Plan Room Mapper</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <!-- Top Toolbar -->
+    <header class="toolbar">
+      <div class="toolbar-group brand-group">
+        <div class="brand-logo" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="4,5 19,5 19,13 13,13 13,19 4,19" stroke-linejoin="round" />
+            <circle cx="4" cy="5" r="2.2" fill="currentColor" />
+            <circle cx="19" cy="5" r="2.2" fill="currentColor" />
+            <circle cx="19" cy="13" r="2.2" fill="currentColor" />
+            <circle cx="13" cy="13" r="2.2" fill="currentColor" />
+            <circle cx="13" cy="19" r="2.2" fill="currentColor" />
+            <circle cx="4" cy="19" r="2.2" fill="currentColor" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">Planpointed</span>
+          <span id="planFileName" class="plan-subtitle">No plan loaded</span>
+        </div>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <!-- File Actions -->
+      <div class="toolbar-group">
+        <button id="btnUploadImage" class="btn btn-secondary" title="Upload building floor plan image">
+          <span>Upload Plan</span>
+        </button>
+        <button id="btnLoadJs" class="btn btn-secondary" title="Load an exported .js project file to edit">
+          <span>Load .js</span>
+        </button>
+        <button id="btnLoadSample" class="btn btn-ghost" title="Load a sample architectural floor plan">
+          <span>Sample</span>
+        </button>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <!-- Mode Tools -->
+      <div class="toolbar-group tool-segmented" role="group" aria-label="Editor tools">
+        <button id="toolDraw" class="btn-tool active" data-tool="draw" title="Draw Room Polygon (D)">
+          <span>Draw</span>
+          <kbd>D</kbd>
+        </button>
+        <button id="toolSelect" class="btn-tool" data-tool="select" title="Select &amp; Edit Room Corners (V)">
+          <span>Edit</span>
+          <kbd>V</kbd>
+        </button>
+        <button id="toolPan" class="btn-tool" data-tool="pan" title="Pan Canvas (H or Space+Drag)">
+          <span>Pan</span>
+          <kbd>H</kbd>
+        </button>
+      </div>
+
+      <div class="toolbar-group">
+        <button id="btnSnapToggle" class="btn btn-toggle active" title="Snap to existing room corners">
+          <span>Snap Corners</span>
+        </button>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <!-- History & Zoom -->
+      <div class="toolbar-group">
+        <button id="btnUndo" class="btn btn-icon" title="Undo (Ctrl+Z)" disabled>↶</button>
+        <button id="btnRedo" class="btn btn-icon" title="Redo (Ctrl+Y)" disabled>↷</button>
+      </div>
+
+      <div class="toolbar-group zoom-group">
+        <button id="btnZoomOut" class="btn btn-icon" title="Zoom Out (-)">−</button>
+        <button id="btnZoomFit" class="btn btn-ghost btn-compact" title="Fit Plan to Screen (0)">Fit</button>
+        <button id="btnZoomIn" class="btn btn-icon" title="Zoom In (+)">+</button>
+      </div>
+
+      <div class="toolbar-spacer"></div>
+
+      <!-- Export CTA -->
+      <div class="toolbar-group">
+        <button id="btnExportJs" class="btn btn-primary" title="Export rooms dictionary to a .js file">
+          <span>Export .js</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="workspace">
+      <div id="canvasContainer" class="canvas-container">
+        <canvas id="planCanvas"></canvas>
+
+        <!-- Empty State Overlay -->
+        <div id="emptyState" class="empty-state">
+          <div class="empty-card">
+            <div class="empty-icon">
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M3 10h9v11" />
+                <path d="M12 14h9" />
+                <circle cx="12" cy="10" r="1.5" fill="currentColor" />
+              </svg>
+            </div>
+            <h1>Map Rooms on Any Building Plan</h1>
+            <p>
+              Upload a floor plan image, click each corner of a room to place dots, and click the
+              first dot again to close and name the room. Export everything as a clean
+              <code>const rooms = { ... }</code> <code>.js</code> file.
+            </p>
+            <div class="empty-actions">
+              <button id="emptyUploadBtn" class="btn btn-primary btn-lg">Upload Plan Image</button>
+              <button id="emptyLoadJsBtn" class="btn btn-secondary btn-lg">Load Exported .js</button>
+              <button id="emptySampleBtn" class="btn btn-ghost btn-lg">Try Sample Plan</button>
+            </div>
+            <p class="empty-hint">Tip: You can also drag &amp; drop an image or <code>.js</code> file anywhere, or paste an image with <kbd>Ctrl+V</kbd>.</p>
+          </div>
+        </div>
+
+        <!-- Missing Image Banner (when .js loaded without embedded image) -->
+        <div id="missingImageBanner" class="floating-banner hidden">
+          <span>Floor plan image was not embedded in this <code>.js</code> file. Rooms are shown on a sized grid.</span>
+          <button id="bannerUploadBtn" class="btn btn-secondary btn-compact">Upload Image to Overlay</button>
+        </div>
+
+        <!-- Drag & Drop Overlay -->
+        <div id="dropOverlay" class="drop-overlay hidden">
+          <div class="drop-overlay-box">Drop floor plan image or <code>.js</code> project file</div>
+        </div>
+
+        <!-- Bottom-left Telemetry HUD -->
+        <div id="hudCoords" class="hud-pill hud-bottom-left hidden">
+          <span id="coordReadout">X: 0, Y: 0 px</span>
+          <span class="hud-sep">•</span>
+          <span id="zoomReadout">100%</span>
+        </div>
+
+        <!-- Bottom-center Quick Hints -->
+        <div id="hudHint" class="hud-pill hud-bottom-center hidden">
+          Click corners to place dots • Click 1st dot to close • Hold <kbd>Shift</kbd> for 45°/90° • <kbd>Backspace</kbd> undo dot • <kbd>Space+Drag</kbd> pan
+        </div>
+      </div>
+
+      <!-- Right Sidebar: Rooms List & Inspector -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div class="sidebar-title-row">
+            <h2>Rooms</h2>
+            <span id="roomCountBadge" class="badge">0</span>
+          </div>
+          <button id="btnClearRooms" class="btn btn-ghost btn-compact danger-text" title="Delete all rooms" disabled>
+            Clear All
+          </button>
+        </div>
+
+        <div id="roomList" class="room-list">
+          <div class="room-list-empty">
+            No rooms mapped yet. Select <strong>Draw</strong> and click room corners on the plan.
+          </div>
+        </div>
+
+        <!-- Selected Room Inspector -->
+        <div id="roomInspector" class="inspector hidden">
+          <div class="inspector-header">
+            <h3>Selected Room</h3>
+            <button id="btnDeleteSelected" class="btn btn-ghost btn-compact danger-text" title="Delete Room (Delete)">
+              Delete
+            </button>
+          </div>
+
+          <label class="field-label" for="inspectorNameInput">Room Name</label>
+          <div class="inspector-rename-row">
+            <input id="inspectorNameInput" type="text" class="text-input" placeholder="e.g. Kitchen" />
+            <button id="btnApplyRename" class="btn btn-secondary btn-compact">Save</button>
+          </div>
+          <div id="inspectorNameError" class="field-error hidden"></div>
+
+          <div class="field-label">Color</div>
+          <div id="inspectorColors" class="color-swatches"></div>
+
+          <div class="inspector-meta">
+            <span id="inspectorMetaStats">0 corners • 0 px²</span>
+          </div>
+
+          <div class="field-label">Vertices (px from top-left)</div>
+          <div id="inspectorPoints" class="points-list"></div>
+        </div>
+
+        <div class="sidebar-footer">
+          <span id="imageMetaFooter">No image loaded</span>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Hidden File Inputs -->
+    <input id="imageFileInput" type="file" accept="image/*" hidden />
+    <input id="jsFileInput" type="file" accept=".js,text/javascript,application/javascript" hidden />
+
+    <!-- Modal: Name Room -->
+    <div id="nameModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="nameModalTitle">
+      <div class="modal-card">
+        <h2 id="nameModalTitle">Name &amp; Save Room</h2>
+        <p class="modal-subtitle">Polygon closed with <span id="nameModalVertexCount">0</span> corners. Give this room a unique name.</p>
+        <form id="nameModalForm">
+          <label class="field-label" for="roomNameInput">Room Name</label>
+          <input
+            id="roomNameInput"
+            type="text"
+            class="text-input"
+            placeholder="e.g. Living Room, Bedroom 1, Kitchen"
+            autocomplete="off"
+          />
+          <div id="nameModalError" class="field-error hidden"></div>
+
+          <div class="field-label" style="margin-top: 14px;">Room Color</div>
+          <div id="nameModalColors" class="color-swatches"></div>
+
+          <div class="modal-actions">
+            <button type="button" id="btnDiscardRoom" class="btn btn-ghost">Discard Polygon</button>
+            <button type="submit" class="btn btn-primary">Save Room</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Export .js -->
+    <div id="exportModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+      <div class="modal-card modal-card-wide">
+        <div class="modal-header-row">
+          <div>
+            <h2 id="exportModalTitle">Export Rooms as <code>.js</code></h2>
+            <p class="modal-subtitle">
+              Exports <code>const rooms = { ... }</code> with coordinates relative to the plan's top-left corner <code>(0, 0)</code> and explicit edge links.
+            </p>
+          </div>
+          <button id="btnCloseExport" class="btn btn-icon" aria-label="Close">✕</button>
+        </div>
+
+        <div class="export-options">
+          <label class="checkbox-label">
+            <input id="chkEmbedImage" type="checkbox" checked />
+            <span>Embed floor plan image in <code>.js</code> (recommended so loading this file restores both image &amp; rooms)</span>
+          </label>
+          <label class="checkbox-label">
+            <input id="chkCommonJs" type="checkbox" checked />
+            <span>Include <code>module.exports</code> guard for Node/bundlers</span>
+          </label>
+        </div>
+
+        <pre id="exportPreview" class="code-preview"></pre>
+
+        <div class="modal-actions">
+          <button id="btnCopyExport" class="btn btn-secondary">Copy Code</button>
+          <button id="btnDownloadExport" class="btn btn-primary">Download .js File</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Replace Image Confirmation -->
+    <div id="replaceImageModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="replaceModalTitle">
+      <div class="modal-card">
+        <h2 id="replaceModalTitle">Replace Floor Plan Image?</h2>
+        <p class="modal-subtitle">
+          You currently have <strong id="replaceRoomCount">0</strong> mapped room(s). Would you like to keep them on the new image or clear them and start fresh?
+        </p>
+        <div class="modal-actions">
+          <button id="btnReplaceCancel" class="btn btn-ghost">Cancel</button>
+          <button id="btnReplaceKeep" class="btn btn-secondary">Keep Existing Rooms</button>
+          <button id="btnReplaceClear" class="btn btn-primary">Clear &amp; Start Fresh</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  </div>
+
+  <script src="src/geometry.js"></script>
+  <script src="src/jsCodec.js"></script>
+  <script src="src/samplePlan.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "name": "planpointed",
+  "version": "1.0.0",
+  "description": "Visual building floor plan room mapper with .js export and reload support",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "serve": "npx --yes serve ."
+  }
+}
